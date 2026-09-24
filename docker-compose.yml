@@ -1,0 +1,85 @@
+services:
+
+  postgres:
+    image: postgres:17
+    container_name: jira-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: jiradb
+      POSTGRES_USER: jira
+      POSTGRES_PASSWORD: jira_password
+
+    volumes:
+      - jira_112_postgres_data:/var/lib/postgresql/data
+
+    networks:
+      - jira_network
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U jira -d jiradb"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+
+  jira:
+    build:
+      context: ./jira
+      dockerfile: Dockerfile
+
+    container_name: jira-11.2
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      JIRA_DB_HOST: postgres
+      JIRA_DB_PORT: 5432
+      JIRA_DB_NAME: jiradb
+      JIRA_DB_USER: jira
+      JIRA_DB_PASSWORD: jira_password
+
+    volumes:
+      - jira_112_data:/var/atlassian/application-data/jira
+
+    networks:
+      - jira_network
+
+    mem_limit: 4g
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:8080/status || exit 1"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+
+networks:
+
+  jira_network:
+    driver: bridge
+
+
+volumes:
+
+  jira_112_data:
+    name: jira_112_data
+
+  jira_112_postgres_data:
+    name: jira_112_postgres_data

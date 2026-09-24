@@ -1,0 +1,115 @@
+FROM debian:bookworm-slim
+
+ARG JIRA_VERSION=11.2.0
+ARG JIRA_DOWNLOAD=https://product-downloads.atlassian.com/software/jira/downloads/atlassian-jira-software-11.2.0.tar.gz
+
+ENV JIRA_HOME=/var/atlassian/application-data/jira
+ENV JIRA_INSTALL=/opt/atlassian/jira
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${JIRA_INSTALL}/bin:${PATH}"
+
+# ------------------------------------------------------------
+# Install required packages
+# ------------------------------------------------------------
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        wget \
+        fontconfig \
+        libfreetype6 \
+        procps \
+        netcat-openbsd \
+        tzdata \
+        tar \
+        gzip \
+        bash \
+        gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# ------------------------------------------------------------
+# Install Eclipse Temurin Java 21
+# ------------------------------------------------------------
+
+RUN mkdir -p /opt/java && \
+    curl -fL \
+        https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse \
+        -o /tmp/jdk.tar.gz && \
+    tar -xzf /tmp/jdk.tar.gz -C /opt/java && \
+    mv /opt/java/jdk-* /opt/java/openjdk && \
+    rm /tmp/jdk.tar.gz
+
+
+# ------------------------------------------------------------
+# Create Jira user
+# ------------------------------------------------------------
+
+RUN groupadd --gid 2001 jira && \
+    useradd \
+        --uid 2001 \
+        --gid 2001 \
+        --home-dir ${JIRA_HOME} \
+        --create-home \
+        --shell /bin/bash \
+        jira
+
+
+# ------------------------------------------------------------
+# Download and install Jira Software 11.2.0
+# ------------------------------------------------------------
+
+RUN mkdir -p ${JIRA_INSTALL} ${JIRA_HOME} && \
+    curl -fL "${JIRA_DOWNLOAD}" \
+        -o /tmp/jira.tar.gz && \
+    tar -xzf /tmp/jira.tar.gz \
+        --strip-components=1 \
+        -C ${JIRA_INSTALL} && \
+    rm /tmp/jira.tar.gz
+
+
+# ------------------------------------------------------------
+# Create Jira home directories
+# ------------------------------------------------------------
+
+RUN mkdir -p \
+        ${JIRA_HOME}/caches \
+        ${JIRA_HOME}/data \
+        ${JIRA_HOME}/export \
+        ${JIRA_HOME}/import \
+        ${JIRA_HOME}/logos \
+        ${JIRA_HOME}/plugins \
+        ${JIRA_HOME}/tmp \
+        ${JIRA_HOME}/log && \
+    chown -R jira:jira \
+        ${JIRA_INSTALL} \
+        ${JIRA_HOME}
+
+
+# ------------------------------------------------------------
+# Container configuration
+# ------------------------------------------------------------
+
+EXPOSE 8080
+
+VOLUME ["${JIRA_HOME}"]
+
+WORKDIR ${JIRA_HOME}
+
+
+# ------------------------------------------------------------
+# Startup script
+# ------------------------------------------------------------
+
+COPY entrypoint.sh /entrypoint.sh
+
+RUN chmod 755 /entrypoint.sh && \
+    chown jira:jira /entrypoint.sh
+
+
+# ------------------------------------------------------------
+# Start Jira
+# ------------------------------------------------------------
+
+ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]

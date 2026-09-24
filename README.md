@@ -18,6 +18,7 @@ To start the Jira Server DC v11.2 and postgres 17.x database
 
 Jira  is now available on http://localhost:8080 or http://<Public_IP>:8080
 
+
 Continue the setup in the browser...
 
 
